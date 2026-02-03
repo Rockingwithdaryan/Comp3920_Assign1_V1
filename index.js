@@ -58,9 +58,8 @@ app.use(
     resave: false,
     saveUninitialized: false,
     store: MongoStore.create({
-      mongooseConnection: mongoose.connection,
+      mongoUrl: process.env.MONGO_URI,
       collectionName: "sessions",
-      // Session expires after 1 hour (60 min × 60 sec × 1000 ms)
       ttl: 60 * 60,
     }),
     cookie: {
@@ -193,10 +192,12 @@ app.get("/login", (req, res) => {
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
 
-  // ⚠️  UNSAFE – username is concatenated directly into the SQL string.
+  // UNSAFE – username is concatenated directly into the SQL string.
   const query = `SELECT * FROM users WHERE username = '${username}'`;
+  console.log("QUERY:", query);
 
   db.query(query, async (err, results) => {
+        console.log("RESULTS:", results);
     if (err) {
       console.error("Login DB error:", err);
       return res.redirect("/login?error=credentials");
@@ -205,9 +206,11 @@ app.post("/login", async (req, res) => {
     if (results.length === 0) return res.redirect("/login?error=credentials");
 
     const user = results[0];
-    const passwordMatch = await bcrypt.compare(password, user.password);
-
-    if (!passwordMatch) return res.redirect("/login?error=credentials");
+    if (results.length === 1) {
+      const passwordMatch = await bcrypt.compare(password, user.password);
+      if (!passwordMatch) return res.redirect("/login?error=credentials");
+    } 
+    req.session.username = user.username; 
 
     // Valid login – create session
     req.session.username = user.username;
@@ -224,8 +227,8 @@ app.get("/members", (req, res) => {
   }
 
   // Pick a random image (1, 2, or 3) from /public/images/
-  const imgNum = Math.floor(Math.random() * 3) + 1;
-  const imgSrc = `/images/img${imgNum}.jpg`;
+  const images = ["devil-may-cry-4-nero-dmc-holy.jpg", "Disco.jpg", "Dolphin.jpg"];
+  const imgSrc = `/images/${images[Math.floor(Math.random() * images.length)]}`;
 
   // ⚠️  UNSAFE – username rendered raw (HTML injection point)
   res.send(`
@@ -261,7 +264,6 @@ app.use((req, res) => {
   `);
 });
 
-// ─── START SERVER ─────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`\n🚀 V1 (UNSAFE) server running on port ${PORT}\n`);
+  console.log(`Server running: http://localhost:${PORT}`);
 });
